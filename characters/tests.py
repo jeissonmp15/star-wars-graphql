@@ -1,41 +1,46 @@
 # Create your tests here.
-import json
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from rest_framework import status
-from rest_framework.test import APIClient
+import graphene
+from django.test.testcases import TestCase
+
+from characters.models import Character
+from graphene_schema.schema import Query, Mutation
 
 
-class EducationTestCase(TestCase):
+class CharacterTestCase(TestCase):
 
-    def setUp(self):
-        # Creamos un usuario y generamos el acceso a la api para hacer pruebas de forma general
-        user = get_user_model()(
-            email='testing_login@dev.com',
-            first_name='Testing',
-            last_name='Testing',
-            username='testing_login'
-        )
-        user.set_password('admin123')
-        user.save()
+    def setUp(self) -> None:
+        super().setUp()
+        self.query = '''
+            query{
+              allCharacters {
+                edges {
+                  node {
+                    id
+                    name
+                    height
+                    birthYear
+                  }
+                }
+              }
+            }
+            '''
 
-        client = APIClient()
-        response = client.post(
-            '/api/token/', {
-                'username': 'testing_login',
-                'password': 'admin123',
-            },
-            format='json'
-        )
+        self.mutation = '''
+            mutation {
+                createCharacter(
+                    name:"Felipe Manrique", height: "170", mass: "65", hairColor: "black", skinColor: "fair", 
+                    eyeColor: "blue", birthYear: "19BBY", gender: "male"
+                ){
+                    name{
+                        name
+                }
+              }
+            }
+        '''
 
-        result = json.loads(response.content)
-        self.access_token = result['access']
-        self.user = user
-
-    def test_create_character(self):
-        client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+    def test_get_character(self):
+        schema = graphene.Schema(query=Query)
 
         character = {
             "name": "Felipe Manrique",
@@ -48,28 +53,14 @@ class EducationTestCase(TestCase):
             "gender": "male"
         }
 
-        response = client.post(
-            '/characters/',
-            character,
-            format='json'
-        )
+        Character.objects.create(**character)
+        result = schema.execute(self.query)
+        self.assertIsNone(result.errors)
+        print(result.data)
 
-        result = json.loads(response.content)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('id', result)
-        self.assertIn('name', result)
-        self.assertIn('height', result)
-        self.assertIn('mass', result)
-        self.assertIn('hair_color', result)
-        self.assertIn('skin_color', result)
-        self.assertIn('eye_color', result)
-        self.assertIn('birth_year', result)
-        self.assertIn('gender', result)
-
-        if 'id' in result:
-            del result['id']
-
-        if 'films_list' in result:
-            del result['films_list']
-
-        self.assertEqual(result, character)
+    def test_create_character(self):
+        schema = graphene.Schema(query=Query, mutation=Mutation)
+        result = schema.execute(self.mutation)
+        self.assertIsNone(result.errors)
+        self.assertIn('name', result.data.get('createCharacter', {}))
+        print(result.data)

@@ -1,41 +1,31 @@
 # Create your tests here.
-import json
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from rest_framework import status
-from rest_framework.test import APIClient
+import graphene
+from django.test.testcases import TestCase
+
+from graphene_schema.schema import Query, Mutation
+from planets.models import Planet
 
 
-class EducationTestCase(TestCase):
+class CharacterTestCase(TestCase):
 
-    def setUp(self):
-        # Creamos un usuario y generamos el acceso a la api para hacer pruebas de forma general
-        user = get_user_model()(
-            email='testing_login@dev.com',
-            first_name='Testing',
-            last_name='Testing',
-            username='testing_login'
-        )
-        user.set_password('admin123')
-        user.save()
+    def setUp(self) -> None:
+        super().setUp()
+        self.query = '''
+            query{
+                allPlanets {
+                    name
+                    diameter
+                    climate
+                    gravity
+                    terrain
+                    population 
+                }
+            }
+            '''
 
-        client = APIClient()
-        response = client.post(
-            '/api/token/', {
-                'username': 'testing_login',
-                'password': 'admin123',
-            },
-            format='json'
-        )
-
-        result = json.loads(response.content)
-        self.access_token = result['access']
-        self.user = user
-
-    def test_create_character(self):
-        client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+    def test_get_character(self):
+        schema = graphene.Schema(query=Query)
 
         planet = {
             "name": "Tierra",
@@ -46,23 +36,8 @@ class EducationTestCase(TestCase):
             "population": "200000"
         }
 
-        response = client.post(
-            '/planets/',
-            planet,
-            format='json'
-        )
+        Planet.objects.create(**planet)
 
-        result = json.loads(response.content)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('id', result)
-        self.assertIn('name', result)
-        self.assertIn('diameter', result)
-        self.assertIn('climate', result)
-        self.assertIn('gravity', result)
-        self.assertIn('terrain', result)
-        self.assertIn('population', result)
-
-        if 'id' in result:
-            del result['id']
-
-        self.assertEqual(result, planet)
+        result = schema.execute(self.query)
+        self.assertIsNone(result.errors)
+        print(result.data)

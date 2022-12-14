@@ -30,5 +30,5 @@ class CreateCharacterMutation(graphene.Mutation):
         return CreateCharacterMutation(name=obj)
 
 
-class Mutation(graphene.ObjectType):
+class Mutation(object):
     create_character = CreateCharacterMutation.Field()

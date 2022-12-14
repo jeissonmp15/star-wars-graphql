@@ -1,45 +1,40 @@
 # Create your tests here.
-import json
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from rest_framework import status
-from rest_framework.test import APIClient
+import graphene
+from django.test.testcases import TestCase
 
 from characters.models import Character
+from films.models import Film
+from graphene_schema.schema import Query, Mutation
 from planets.models import Planet
 
 
-class EducationTestCase(TestCase):
+class CharacterTestCase(TestCase):
 
-    def setUp(self):
-        # Creamos un usuario y generamos el acceso a la api para hacer pruebas de forma general
-        user = get_user_model()(
-            email='testing_login@dev.com',
-            first_name='Testing',
-            last_name='Testing',
-            username='testing_login'
-        )
-        user.set_password('admin123')
-        user.save()
+    def setUp(self) -> None:
+        super().setUp()
+        self.query = '''
+            query {
+                allFilms {
+                    title
+                    episode
+                    openingText
+                    planets{
+                        name
+                    }
+                    characters {
+                        edges {
+                            node {
+                              name
+                            }
+                        }
+                    }
+              }
+            }
+            '''
 
-        client = APIClient()
-        response = client.post(
-            '/api/token/', {
-                'username': 'testing_login',
-                'password': 'admin123',
-            },
-            format='json'
-        )
-
-        result = json.loads(response.content)
-        self.access_token = result['access']
-        self.user = user
-
-    def test_create_character(self):
-        client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
-
+    def test_get_character(self):
+        schema = graphene.Schema(query=Query)
         characters = [
             {
                 "name": "Felipe Manrique",
@@ -103,36 +98,12 @@ class EducationTestCase(TestCase):
             "director": "George Lucas",
             "producer": "Gary Kurtz, Rick McCallum",
             "release_date": "2022-11-14",
-            "planets": [
-                1,
-                2,
-            ],
-            "characters": [
-                1,
-                2,
-                3,
-            ]
         }
 
-        response = client.post(
-            '/films/',
-            film,
-            format='json'
-        )
+        film_intance = Film.objects.create(**film)
+        film_intance.planets.add(*[1, 2])
+        film_intance.characters.add(*[1, 2, 3])
 
-        result = json.loads(response.content)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('id', result)
-        self.assertIn('title', result)
-        self.assertIn('episode', result)
-        self.assertIn('opening_text', result)
-        self.assertIn('director', result)
-        self.assertIn('producer', result)
-        self.assertIn('release_date', result)
-        self.assertIn('characters', result)
-        self.assertIn('planets', result)
-
-        if 'id' in result:
-            del result['id']
-
-        self.assertEqual(result, film)
+        result = schema.execute(self.query)
+        self.assertIsNone(result.errors)
+        print(result.data)
